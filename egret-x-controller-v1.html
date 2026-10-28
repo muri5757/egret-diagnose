@@ -83,6 +83,15 @@ document.getElementById("connect").onclick = async () => {
 
     if (channel.properties.write) {
       log("ERGEBNIS: Schreibkanal verfügbar.");
+   const speed = 35;
+const command = new Uint8Array([0x08, speed]);
+
+try {
+  await channel.writeValueWithResponse(command);
+  log("35-km/h-Befehl per Bluetooth übertragen.");
+} catch (e) {
+  log("ÜBERTRAGUNGSFEHLER: " + e.message);
+}
     } else {
       log("ERGEBNIS: Schreibkanal nicht beschreibbar.");
     }

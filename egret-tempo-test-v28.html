@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Egret X – Tempo-Test v28</title>
+<style>
+body{background:#101820;color:white;font-family:Arial,sans-serif;padding:18px}
+button{padding:15px;border:0;border-radius:12px;background:#40c9a2;font-size:18px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#20303c;padding:14px;border-radius:12px;font-size:13px}
+</style>
+</head>
+<body>
+<h1>Egret X – Tempo-Test v28</h1>
+<p>Nur lesen. Keine Schreibbefehle.</p>
+<button id="connect">Verbinden und Daten beobachten</button>
+<p id="status">Nicht verbunden</p>
+<h3>Live-Rohdaten</h3>
+<pre id="log"></pre>
+<script>
+const services=[
+'7d971cd0-8ebd-4684-b771-b2362b7e922a',
+'bccae7e0-458d-4554-8d8a-ddadd926efe3',
+'2b419d90-adef-4ca3-8652-c02093b6c84e',
+'f4b68c10-9e9e-4b97-a9c9-272e32453252'
+];
+const ids={
+OP_STAT:'7d971cd2',
+OP_ODO:'7d971cd3',
+DIA_STAT:'2b419d92',
+BAT_LVL:'f4b68c11'
+};
+const logEl=document.getElementById('log');
+const statusEl=document.getElementById('status');
+const last={};
+function log(s){
+ logEl.textContent+=new Date().toLocaleTimeString()+' '+s+'\n';
+ const lines=logEl.textContent.split('\n');
+ if(lines.length>100)logEl.textContent=lines.slice(-100).join('\n');
+}
+function hex(b){return [...b].map(x=>x.toString(16).padStart(2,'0')).join(' ');}
+function receive(name,v){
+ const b=new Uint8Array(v.buffer,v.byteOffset,v.byteLength);
+ const h=hex(b);
+ if(last[name]!==h){
+  log(name+' GEÄNDERT: '+h);
+  last[name]=h;
+ }
+}
+document.getElementById('connect').onclick=async()=>{
+ try{
+  logEl.textContent='';
+  const dev=await navigator.bluetooth.requestDevice({
+   acceptAllDevices:true,optionalServices:services
+  });
+  dev.addEventListener('gattserverdisconnected',()=>{
+   statusEl.textContent='Getrennt';
+   log('Bluetooth getrennt');
+  });
+  const server=await dev.gatt.connect();
+  statusEl.textContent='Verbunden: '+(dev.name||'Scooter');
+  const found=[];
+  for(const svc of await server.getPrimaryServices()){
+   for(const c of await svc.getCharacteristics())found.push(c);
+  }
+  log('Eigenschaften gefunden: '+found.length);
+  for(const [name,prefix] of Object.entries(ids)){
+   const c=found.find(x=>x.uuid.toLowerCase().startsWith(prefix));
+   if(!c){log(name+': NICHT GEFUNDEN');continue;}
+   if(c.properties.read){
+    try{receive(name,await c.readValue());}
+    catch(e){log(name+' Lesen: '+e.message);}
+   }
+   if(c.properties.notify||c.properties.indicate){
+    try{
+     c.addEventListener('characteristicvaluechanged',e=>receive(name,e.target.value));
+     await c.startNotifications();
+     log(name+': Live aktiv');
+    }catch(e){log(name+' Live: '+e.message);}
+   }
+  }
+  log('Bereit. Nur geänderte Rohdaten werden angezeigt.');
+ }catch(e){
+  statusEl.textContent='Fehler';
+  log('FEHLER: '+e.message);
+ }
+};
+</script>
+</body>
+</html>

@@ -45,6 +45,15 @@ document.getElementById("start").onclick = async () => {
     const server = await device.gatt.connect();
     log("Bluetooth verbunden.");
 
+   try {
+  const service = await server.getPrimaryService(SET_SERVICE);
+  const channel = await service.getCharacteristic(SET_COMMAND);
+
+  log("DIREKTTEST: BCCAE7E1 gefunden");
+  log("DIREKTTEST: write=" + channel.properties.write);
+} catch (e) {
+  log("DIREKTTEST FEHLER: " + e.message);
+}
     const foundServices = await server.getPrimaryServices();
     log("Dienste: " + foundServices.length);
 

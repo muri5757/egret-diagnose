@@ -52,7 +52,12 @@ SET_STAT:'bccae7e2',BAT_DIAG:'f4b68c14'};
 function receive(name,v){
 const b=new Uint8Array(v.buffer,v.byteOffset,v.byteLength);
 if(name==='BAT_LVL'&&b.length)$('battery').textContent=b[0]+' %';
-if(name==='OP_STAT' && b.length>=13){
+if(name==='OP_STAT' && b.length>=4){
+  log('TEMPO-ROHDATEN: Byte 1='+b[1]+
+      ', Byte 2='+b[2]+
+      ', Byte 3='+b[3]);
+}
+  if(name==='OP_STAT' && b.length>=13){
   $('mode').textContent = b[12];
   $('scooter').textContent = 'Daten empfangen';
 }

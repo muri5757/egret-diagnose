@@ -1,0 +1,103 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Egret X Controller v1</title>
+<style>
+body {
+  background:#101820;
+  color:#fff;
+  font:16px Arial,sans-serif;
+  padding:20px;
+}
+button {
+  width:100%;
+  padding:18px;
+  border:0;
+  border-radius:12px;
+  background:#65c6a5;
+  color:#101820;
+  font-size:18px;
+  font-weight:bold;
+}
+pre {
+  background:#23313d;
+  padding:16px;
+  border-radius:12px;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  line-height:1.6;
+}
+</style>
+</head>
+<body>
+
+<h2>EGRET X</h2>
+<p>Controller-Diagnose v1</p>
+<p>Nur Bluetooth prüfen – keine Befehle senden.</p>
+
+<button id="connect">Controller prüfen</button>
+<pre id="log">Bereit.</pre>
+
+<script>
+const SERVICE =
+  "bccae7e0-458d-4554-8d8a-ddadd926efe3";
+
+const COMMAND =
+  "bccae7e1-458d-4554-8d8a-ddadd926efe3";
+
+const logBox = document.getElementById("log");
+
+function log(message) {
+  logBox.textContent += "\n" + message;
+}
+
+document.getElementById("connect").onclick = async () => {
+  logBox.textContent = "Verbinde ...";
+  let device;
+
+  try {
+    device = await navigator.bluetooth.requestDevice({
+      filters: [
+        { namePrefix:"EGRET" },
+        { namePrefix:"Egret" }
+      ],
+      optionalServices:[SERVICE]
+    });
+
+    const server = await device.gatt.connect();
+    log("Bluetooth verbunden.");
+
+    const service =
+      await server.getPrimaryService(SERVICE);
+
+    log("SETTINGS-Dienst gefunden.");
+
+    const channel =
+      await service.getCharacteristic(COMMAND);
+
+    log("BCCAE7E1 gefunden.");
+    log("Schreibbar: " + channel.properties.write);
+
+    if (channel.properties.write) {
+      log("ERGEBNIS: Schreibkanal verfügbar.");
+    } else {
+      log("ERGEBNIS: Schreibkanal nicht beschreibbar.");
+    }
+
+    server.disconnect();
+    log("Bluetooth getrennt.");
+
+  } catch (error) {
+    log("FEHLER: " + error.message);
+
+    if (device && device.gatt.connected) {
+      device.gatt.disconnect();
+    }
+  }
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="de">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Egret Lesetest v24</title>
+<h2>Egret X – Lesetest v24</h2>
+<p>Nur lesen, keine Steuerbefehle.</p>
+<button id="go">Verbinden und lesen</button>
+<pre id="log" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+<script>
+const log=s=>document.querySelector('#log').textContent+=s+'\n';
+const svcs=[
+'7d971cd0-8ebd-4684-b771-b2362b7e922a',
+'bccae7e0-458d-4554-8d8a-ddadd926efe3',
+'2b419d90-adef-4ca3-8652-c02093b6c84e',
+'f4b68c10-9e9e-4b97-a9c9-272e32453252'];
+const targets={
+OP_STAT:'7d971cd2',BAT_LVL:'f4b68c11',
+DIA_STAT:'2b419d92',OP_ODO:'7d971cd3',
+SET_STAT:'bccae7e2',BAT_DIAG:'f4b68c14'};
+document.querySelector('#go').onclick=async()=>{
+let server;
+try{
+const dev=await navigator.bluetooth.requestDevice({
+acceptAllDevices:true,optionalServices:svcs});
+server=await dev.gatt.connect();
+log('Verbunden');
+const found=[];
+for(const svc of await server.getPrimaryServices()){
+for(const c of await svc.getCharacteristics())found.push(c);
+}
+log('Eigenschaften: '+found.length);
+for(const [name,prefix] of Object.entries(targets)){
+const c=found.find(x=>x.uuid.toLowerCase().startsWith(prefix));
+if(!c){log(name+': FEHLT');continue;}
+if(!c.properties.read){log(name+': nicht lesbar');continue;}
+try{
+const v=await c.readValue();
+const b=new Uint8Array(v.buffer,v.byteOffset,v.byteLength);
+log(name+': '+Array.from(b,x=>x.toString(16).padStart(2,'0')).join(' '));
+}catch(e){log(name+': Lesefehler '+e.message);}
+}
+log('Fertig – keine Schreibbefehle');
+}catch(e){log('Fehler: '+e.message);}
+finally{if(server&&server.connected)server.disconnect();}
+};
+</script>
+</html>

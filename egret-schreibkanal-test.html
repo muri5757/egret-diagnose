@@ -1,0 +1,93 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Egret X – Schreibkanal-Diagnose</title>
+<style>
+body { background:#101820; color:white; font:16px Arial,sans-serif; padding:20px; }
+button { background:#65c6a5; color:#101820; border:0; border-radius:12px; padding:18px; font-size:17px; font-weight:bold; width:100%; }
+pre { white-space:pre-wrap; overflow-wrap:anywhere; background:#23313d; padding:15px; border-radius:12px; line-height:1.6; }
+</style>
+</head>
+<body>
+<h2>Egret X – Schreibkanal-Test</h2>
+<p>Nur prüfen. Keine Befehle senden.</p>
+<button id="start">Bluetooth prüfen</button>
+<pre id="log">Bereit.</pre>
+
+<script>
+const SET_SERVICE = "bccae7e0-458d-4554-8d8a-ddadd926efe3";
+const SET_COMMAND = "bccae7e1-458d-4554-8d8a-ddadd926efe3";
+
+const services = [
+  "7d971cd0-8ebd-4684-b771-b2362b7e922a",
+  SET_SERVICE,
+  "2b419d90-adef-4ca3-8652-c02093b6c84e",
+  "f4b68c10-9e9e-4b97-a9c9-272e32453252",
+  "70d1b670-eba5-4d76-868f-6d1b66108fdc"
+];
+
+const output = document.getElementById("log");
+function log(s) { output.textContent += "\n" + s; }
+
+document.getElementById("start").onclick = async () => {
+  output.textContent = "Starte Prüfung ...";
+  let device;
+
+  try {
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix:"EGRET" }, { namePrefix:"Egret" }],
+      optionalServices: services
+    });
+
+    const server = await device.gatt.connect();
+    log("Bluetooth verbunden.");
+
+    const foundServices = await server.getPrimaryServices();
+    log("Dienste: " + foundServices.length);
+
+    let found = false;
+
+    for (const service of foundServices) {
+      log("\nDienst: " + service.uuid);
+
+      try {
+        const chars = await service.getCharacteristics();
+
+        for (const c of chars) {
+          const id = c.uuid.toLowerCase();
+          const p = c.properties;
+          log("  " + id.slice(0,8) +
+            " | write=" + p.write +
+            " | writeNoResponse=" + p.writeWithoutResponse);
+
+          if (id === SET_COMMAND) {
+            found = true;
+            log(">>> GESUCHTER SCHREIBKANAL GEFUNDEN");
+            log(">>> Schreibbar: " +
+              (p.write || p.writeWithoutResponse));
+          }
+        }
+      } catch (e) {
+        log("  Lesefehler: " + e.message);
+      }
+    }
+
+    if (!found) {
+      log("\nERGEBNIS: BCCAE7E1 NICHT GEFUNDEN.");
+    }
+
+    server.disconnect();
+    log("Bluetooth wieder getrennt.");
+  } catch (e) {
+    log("FEHLER: " + e.message);
+    if (device && device.gatt.connected) {
+      device.gatt.disconnect();
+    }
+  }
+};
+</script>
+</body>
+</html>

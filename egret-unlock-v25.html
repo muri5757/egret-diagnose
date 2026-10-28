@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Egret Unlock v25 – Anzeige</title>
+<style>
+body{font-family:-apple-system,Arial,sans-serif;background:#101820;color:white;margin:0;padding:20px}
+h2{margin-top:8px}
+button{font-size:17px;padding:14px;border:0;border-radius:12px;background:#45c9a3;color:#102020;font-weight:bold}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:22px 0}
+.tile{background:#24343f;padding:20px 12px;border-radius:15px;text-align:center}
+.value{font-size:27px;font-weight:bold;margin-top:12px}
+small{color:#bbcad2}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;color:#c5d1d8}
+</style>
+</head>
+<body>
+<h2>Egret X – Anzeige v25</h2>
+<p id="status">Nicht verbunden</p>
+<button id="connect">Mit Scooter verbinden</button>
+<div class="grid">
+<div class="tile"><small>Akku</small><div class="value" id="battery">–</div></div>
+<div class="tile"><small>Kilometerstand</small><div class="value" id="odo">–</div></div>
+<div class="tile"><small>Geschwindigkeit</small><div class="value" id="speed">–</div></div>
+<div class="tile"><small>Bluetooth</small><div class="value" id="ble">–</div></div>
+</div>
+<pre id="log"></pre>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const log=s=>$('log').textContent+=s+'\n';
+const services=[
+'7d971cd0-8ebd-4684-b771-b2362b7e922a',
+'bccae7e0-458d-4554-8d8a-ddadd926efe3',
+'2b419d90-adef-4ca3-8652-c02093b6c84e',
+'f4b68c10-9e9e-4b97-a9c9-272e32453252'
+];
+const ids={
+OP_STAT:'7d971cd2',BAT_LVL:'f4b68c11',
+DIA_STAT:'2b419d92',OP_ODO:'7d971cd3',
+SET_STAT:'bccae7e2',BAT_DIAG:'f4b68c14'
+};
+function show(name,b){
+log(name+': '+Array.from(b,x=>x.toString(16).padStart(2,'0')).join(' '));
+if(name==='BAT_LVL'&&b.length)$('battery').textContent=b[0]+' %';
+if(name==='OP_ODO'&&b.length>=5){
+const km=b[2]*65536+b[3]*256+b[4];
+$('odo').textContent=km+' km';
+}
+if(name==='OP_STAT'&&b.length>=4){
+$('speed').textContent='0,0 km/h';
+}
+}
+$('connect').onclick=async()=>{
+$('connect').disabled=true;
+try{
+const device=await navigator.bluetooth.requestDevice({
+acceptAllDevices:true,optionalServices:services
+});
+device.addEventListener('gattserverdisconnected',()=>{
+$('status').textContent='Verbindung getrennt';
+$('ble').textContent='Getrennt';
+$('connect').disabled=false;
+});
+const server=await device.gatt.connect();
+$('status').textContent='Verbunden mit '+(device.name||'Egret X');
+$('ble').textContent='Verbunden';
+const all=[];
+for(const s of await server.getPrimaryServices()){
+for(const c of await s.getCharacteristics())all.push(c);
+}
+log('Gefunden: '+all.length+' Eigenschaften');
+const active=[];
+for(const [name,prefix] of Object.entries(ids)){
+const c=all.find(x=>x.uuid.toLowerCase().startsWith(prefix));
+if(!c){log(name+': nicht gefunden');continue;}
+active.push({name,c});
+if(c.properties.read){
+try{
+log('Lese '+name+' ...');
+const v=await c.readValue();
+show(name,new Uint8Array(v.buffer,v.byteOffset,v.byteLength));
+}catch(e){log('Lesefehler '+name+': '+e.message);}
+}
+}
+log('Erste Messwerte gelesen');
+for(const {name,c} of active){
+if(!c.properties.notify)continue;
+try{
+log('Starte Live-Daten '+name+' ...');
+c.addEventListener('characteristicvaluechanged',e=>{
+const v=e.target.value;
+show(name,new Uint8Array(v.buffer,v.byteOffset,v.byteLength));
+});
+await c.startNotifications();
+log('Live-Daten aktiv: '+name);
+}catch(e){log('Live-Fehler '+name+': '+e.message);}
+}
+log('Bereit – nur Lesen, keine Schreibbefehle');
+}catch(e){
+log('Fehler: '+e.message);
+$('status').textContent='Fehler bei der Verbindung';
+$('connect').disabled=false;
+}
+};
+</script>
+</body>
+</html>
